@@ -1,3 +1,3 @@
 *.swp
-*.p[co]
+*.py[co]
 venv
