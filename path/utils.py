@@ -1,36 +1,45 @@
 import numpy as np
 
+def orient_2d(p,q,r):
+    """
+        > 0 if CCW
+        < 0 if CW
+        = 0 if colinear
+    """
+    return (q[0]-p[0])*(r[1]-p[1]) - (r[0]-p[0])*(q[1]-p[1])
+
 def linspace2d(start,end,num):
 	return zip(np.linspace(start[0],end[0],num),np.linspace(start[1],end[1],num))
 
-class Path:
-	def __init__(self):
-		self.points = []
-		self.normals = []
+def intersects(seg1,seg2):
+    return \
+        orient_2d(seg2.start,seg2.end,seg1.start)* \
+        orient_2d(seg2.start,seg2.end,seg1.end)<=0 \
+        and \
+        orient_2d(seg1.start,seg1.end,seg2.start)* \
+        orient_2d(seg1.start,seg1.end,seg2.end)<=0
 
-	def generate_path(self,length=10,start=np.array([100,300]),end=np.array([700,300])):
-		self.points = linspace2d(start,end,length)
 
-	def perturb_path(self,factor=50):
-		for index,point in enumerate(self.points):
-			r = np.random.rand(2)-np.array([0.5,0.5])
-			self.points[index] = point+r*factor
-
-	def get_path_normals(self):
-		self.normals = [None for p in self.points]
-		for index,point in enumerate(self.points):
-			if index > 1:
-				xdiff = point[0]-self.points[index-2][0]
-				ydiff = point[1]-self.points[index-2][1]
-				n = np.array([-ydiff,xdiff])
-				n /= np.linalg.norm(n)
-				self.normals[index-1] = [n,-n]
-
-class Box:
-	def __init__(self,origin=np.array([300,300]),size=np.array([100,100])):
-		self.origin = origin
-		self.size = size
-	def point_in(self,point):
-		x = point[0] >= self.origin[0] and point[0] <= self.origin[0]+self.size[0]
-		y = point[1] >= self.origin[1] and point[1] <= self.origin[1]+self.size[1]
-		return x and y
+"""
+    From http://stackoverflow.com/questions/3252194/numpy-and-line-intersections
+"""
+def perp(a) :
+    b = np.empty_like(a)
+    b[0] = -a[1]
+    b[1] = a[0]
+    return b
+def intersection_point(seg1, seg2):
+    if not intersects(seg1,seg2):
+        return None
+    a1 = seg1[0]
+    a2 = seg1[1]
+    b1 = seg2[0]
+    b2 = seg2[1]
+    
+    da = a2-a1
+    db = b2-b1
+    dp = a1-b1
+    dap = perp(da)
+    denom = np.dot( dap, db)
+    num = np.dot( dap, dp )
+    return (num / denom)*db + b1

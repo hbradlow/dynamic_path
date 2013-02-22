@@ -1,9 +1,8 @@
-import random, math, time
 import Tkinter as tk
-import numpy as np
+
 
 class Point2D:
-    def __init__(self,position,radius=3,fill="red",outline="black"):
+    def __init__(self, position, radius=3, fill="red", outline="black"):
         self.position = position #a numpy array
         self.radius = radius
         self.fill = fill
@@ -49,6 +48,8 @@ class Visualizer:
             Adds a drawable to the visualizer. 
         """
         self.drawables.append(drawable)
+    def clear(self):
+        self.drawables = []
     def run(self):
         self.draw()
     def draw(self):
