@@ -3,6 +3,7 @@ from scipy import optimize
 from path.utils import *
 import math
 import random
+import time
 
 class Environment:
     def __init__(self):
@@ -10,8 +11,11 @@ class Environment:
     def add_polygon(self,polygon):
         self.polygons.append(polygon)
 
-def cost(locations,env):
+def cost(locations,env,initial_location,final_location):
     c = 0
+    #initial/final location penalty
+    c += 10000*np.linalg.norm(initial_location-np.array(locations[0:2]))
+    c += 10000*np.linalg.norm(final_location-np.array(locations[-2:]))
     previous_location = None
     for location in grouper(2,locations):
         location = np.array(location)
@@ -20,13 +24,14 @@ def cost(locations,env):
             state = State(location)
             d = state.penetration_depth(polygon)
             if d:
-                c += 100*d**2
+                c += 1000*d**2
         #penalty to maintain the lengths of the links
         if previous_location is not None:
             d = abs(np.linalg.norm(location-previous_location)-Path.ideal_length)
             c += d**2
         previous_location = location
     return c
+
 class Path:
     ideal_length = 60.0
 
@@ -53,28 +58,38 @@ class Path:
 
 
 
-    def update(self,env):
-        """
-        for state in self.states:
-            if state.normals:
+    def update(self,env,maxiter=5):
+        t_init = time.time()
+
+        for index,state in enumerate(self.states):
+            if state.normal_points() is not None:
                 old_loc = state.location
-                old_cost = self.cost(env)
+
+                x0 = np.array([s.location for s in self.states])
+                old_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
+
                 for point in state.normal_points():
-                    state.location = point
-                    if self.cost(env) >= old_cost:
-                        state.location = old_loc
-        """
-        x0 = np.array([state.location for state in self.states])
-        print x0
-        res = optimize.fmin(cost,x0,args=(env,))
-        for index,location in enumerate(grouper(2,res)):
-            self.states[index].location = np.array(location)
+                    x0 = np.array([state.location for state in self.states])
+                    x0[index] = point
+
+                    res = optimize.fmin(cost,x0,args=(env,x0[0],x0[-1]),maxiter=maxiter,disp=False)
+
+                    if cost(x0.flatten(),env,self.initial_location,self.final_location) < old_cost:
+                        for index,location in enumerate(grouper(2,res)):
+                            self.states[index].location = np.array(location)
+
+        
+        final_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
+        print "Final cost is",final_cost
+        print "Took",time.time()-t_init,"seconds"
 
 
     def generate_path(self,length=10,start=np.array([100,300]),end=np.array([700,300])):
         points = linspace2d(start,end,length)
         for p in points:
             self.states.append(State(p))
+        self.initial_location = self.states[0].location
+        self.final_location = self.states[-1].location
 
     def perturb_path(self,factor=50):
         for index,point in enumerate(self.points):
