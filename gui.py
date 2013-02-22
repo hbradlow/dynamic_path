@@ -36,13 +36,16 @@ class Line2D:
         canvas.create_line(self.start[0],self.start[1],self.end[0],self.end[1])
 
 class Visualizer:
-    def __init__(self,root,width,height):
+    def __init__(self,root,width,height,key_callback=None):
         self.drawables = [] #list of drawable objects
 
         self.frame = tk.Frame(root)
+        self.frame.focus_set()
         self.canvas = tk.Canvas(self.frame,bg="white",width=width,height=height)
         self.canvas.pack()
         self.frame.pack()
+        print key_callback
+        self.frame.bind("<Key>",key_callback)
     def add_drawable(self,drawable):
         """
             Adds a drawable to the visualizer. 

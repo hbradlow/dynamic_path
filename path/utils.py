@@ -1,4 +1,6 @@
 import numpy as np
+from itertools import izip_longest
+
 
 def orient_2d(p,q,r):
     """
@@ -43,3 +45,8 @@ def intersection_point(seg1, seg2):
     denom = np.dot( dap, db)
     num = np.dot( dap, dp )
     return (num / denom)*db + b1
+
+def grouper(n, iterable, fillvalue=None):
+    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return izip_longest(fillvalue=fillvalue, *args)

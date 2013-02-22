@@ -1,5 +1,6 @@
 import numpy as np
-from path.utils import orient_2d, linspace2d
+from scipy import optimize
+from path.utils import *
 import math
 import random
 
@@ -9,7 +10,26 @@ class Environment:
     def add_polygon(self,polygon):
         self.polygons.append(polygon)
 
+def cost(locations,env):
+    c = 0
+    previous_location = None
+    for location in grouper(2,locations):
+        location = np.array(location)
+        #colision penalty
+        for polygon in env.polygons:
+            state = State(location)
+            d = state.penetration_depth(polygon)
+            if d:
+                c += 100*d**2
+        #penalty to maintain the lengths of the links
+        if previous_location is not None:
+            d = abs(np.linalg.norm(location-previous_location)-Path.ideal_length)
+            c += d**2
+        previous_location = location
+    return c
 class Path:
+    ideal_length = 60.0
+
     def __init__(self):
         self.states = []
 
@@ -19,7 +39,8 @@ class Path:
     @property
     def points(self):
         return [s.location for s in self.states]
-    
+
+    """
     def cost(self,env):
         c = 0
         for state in self.states:
@@ -28,8 +49,12 @@ class Path:
                 if d:
                     c += d**2
         return c
+    """
+
+
 
     def update(self,env):
+        """
         for state in self.states:
             if state.normals:
                 old_loc = state.location
@@ -38,6 +63,12 @@ class Path:
                     state.location = point
                     if self.cost(env) >= old_cost:
                         state.location = old_loc
+        """
+        x0 = np.array([state.location for state in self.states])
+        print x0
+        res = optimize.fmin(cost,x0,args=(env,))
+        for index,location in enumerate(grouper(2,res)):
+            self.states[index].location = np.array(location)
 
 
     def generate_path(self,length=10,start=np.array([100,300]),end=np.array([700,300])):

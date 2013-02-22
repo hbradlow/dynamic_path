@@ -6,7 +6,13 @@ from path import structures
 from gui import Visualizer, Point2D, Line2D, Box2D, add_line
 
 root = tk.Tk()
-vis = Visualizer(root,800,600)
+
+def key_callback(event):
+    path.update(env)
+    draw()
+    vis.draw()
+
+vis = Visualizer(root,800,600,key_callback=key_callback)
 
 b = structures.Box(np.array([300,200]),np.array([200,200]))
 env = structures.Environment()
@@ -46,13 +52,4 @@ def draw():
 
 draw()
 vis.run()
-
-for i in range(10):
-    print "Press enter to continue",
-    print "Path cost: ",path.cost(env)
-    raw_input()
-    path.update(env)
-    draw()
-    vis.draw()
-
 root.mainloop()
