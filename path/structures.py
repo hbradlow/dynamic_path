@@ -10,6 +10,12 @@ class Environment:
         self.polygons = []
     def add_polygon(self,polygon):
         self.polygons.append(polygon)
+    def point_in(self,point):
+        flag = False
+        for polygon in self.polygons:
+            if polygon.point_in(point):
+                flag = True
+        return flag
 
 def cost(locations,env,initial_location,final_location):
     c = 0
@@ -24,11 +30,11 @@ def cost(locations,env,initial_location,final_location):
             state = State(location)
             d = state.penetration_depth(polygon)
             if d:
-                c += 1000*d**2
+                c += 100000+1000*d**2
         #penalty to maintain the lengths of the links
         if previous_location is not None:
             d = abs(np.linalg.norm(location-previous_location)-Path.ideal_length)
-            c += d**2
+            c += 100*d**2
         previous_location = location
     return c
 
@@ -37,6 +43,8 @@ class Path:
 
     def __init__(self):
         self.states = []
+        self.factor = 50
+        self.discount = .8
 
     @property
     def normals(self):
@@ -45,20 +53,10 @@ class Path:
     def points(self):
         return [s.location for s in self.states]
 
-    """
-    def cost(self,env):
-        c = 0
-        for state in self.states:
-            for polygon in env.polygons:
-                d = state.penetration_depth(polygon)
-                if d:
-                    c += d**2
-        return c
-    """
-
-
-
-    def update(self,env,maxiter=5):
+    def update(self,env,maxiter=2):
+        """
+            Make the path a bit better
+        """
         t_init = time.time()
 
         for index,state in enumerate(self.states):
@@ -68,30 +66,30 @@ class Path:
                 x0 = np.array([s.location for s in self.states])
                 old_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
 
-                for point in state.normal_points():
-                    x0 = np.array([state.location for state in self.states])
+                for point in state.normal_points(factor=self.factor):
                     x0[index] = point
-
                     res = optimize.fmin(cost,x0,args=(env,x0[0],x0[-1]),maxiter=maxiter,disp=False)
-
                     if cost(x0.flatten(),env,self.initial_location,self.final_location) < old_cost:
                         for index,location in enumerate(grouper(2,res)):
                             self.states[index].location = np.array(location)
+                            self.generate_path_normals()
 
         
         final_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
         print "Final cost is",final_cost
         print "Took",time.time()-t_init,"seconds"
+        self.factor *= self.discount
 
 
-    def generate_path(self,length=10,start=np.array([100,300]),end=np.array([700,300])):
+    def generate_path(self,length=15,start=np.array([100,300]),end=np.array([700,300])):
+        Path.ideal_length = np.linalg.norm(start-end) / length
         points = linspace2d(start,end,length)
         for p in points:
             self.states.append(State(p))
         self.initial_location = self.states[0].location
         self.final_location = self.states[-1].location
 
-    def perturb_path(self,factor=50):
+    def perturb_path(self,factor=10):
         for index,point in enumerate(self.points):
             r = np.random.rand(2)-np.array([0.5,0.5])
             self.states[index].location = point+r*factor
@@ -156,6 +154,6 @@ class Box(Polygon):
         self.edges = [
                         Segment(origin,origin+np.array([size[0],0])),
                         Segment(origin+np.array([size[0],0]),origin+np.array([size[0],size[1]])),
-                        Segment(origin+np.array([size[1],size[0]]),origin+np.array([0,size[1]])),
+                        Segment(origin+np.array([size[0],size[1]]),origin+np.array([0,size[1]])),
                         Segment(origin+np.array([0,size[1]]),origin),
                     ]

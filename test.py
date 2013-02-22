@@ -14,9 +14,11 @@ def key_callback(event):
 
 vis = Visualizer(root,800,600,key_callback=key_callback)
 
-b = structures.Box(np.array([300,200]),np.array([200,200]))
+b = structures.Box(np.array([250,150]),np.array([150,200]))
+b2 = structures.Box(np.array([450,250]),np.array([150,200]))
 env = structures.Environment()
 env.add_polygon(b)
+env.add_polygon(b2)
 
 path = structures.Path()
 path.generate_path()
@@ -28,11 +30,8 @@ def draw():
     def draw_path(states):
         prev = None
         for state in states:
-            d = state.penetration_depth(b)
             radius = 3
-            if d:
-                radius += d/10.
-            if b.point_in(state.location):
+            if env.point_in(state.location):
                 vis.add_drawable(Point2D(state.location,fill="blue",radius=radius))
             else:
                 vis.add_drawable(Point2D(state.location,fill="red",radius=radius))
@@ -48,6 +47,8 @@ def draw():
 
     draw_path(path.states)
     for edge in b.edges:
+        vis.add_drawable(Line2D(edge.start,edge.end))
+    for edge in b2.edges:
         vis.add_drawable(Line2D(edge.start,edge.end))
 
 draw()
