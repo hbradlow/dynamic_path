@@ -8,9 +8,12 @@ from gui import Visualizer, Point2D, Line2D, Box2D, add_line
 root = tk.Tk()
 
 def key_callback(event):
-    path.update(env)
-    draw()
-    vis.draw()
+    def draw_callback():
+        draw()
+        vis.draw()
+        root.update_idletasks()
+    path.benchmark(env,draw_callback=draw_callback,iterations=10)
+    #path.update(env)
 
 vis = Visualizer(root,800,600,key_callback=key_callback)
 

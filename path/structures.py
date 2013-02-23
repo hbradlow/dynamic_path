@@ -4,6 +4,7 @@ from path.utils import *
 import math
 import random
 import time
+import copy
 
 class Environment:
     def __init__(self):
@@ -18,24 +19,32 @@ class Environment:
         return flag
 
 def cost(locations,env,initial_location,final_location):
+    """
+        Calculate the cost of a path
+    """
     c = 0
+
     #initial/final location penalty
     c += 10000*np.linalg.norm(initial_location-np.array(locations[0:2]))
     c += 10000*np.linalg.norm(final_location-np.array(locations[-2:]))
+
     previous_location = None
     for location in grouper(2,locations):
         location = np.array(location)
+
         #colision penalty
         for polygon in env.polygons:
             state = State(location)
             d = state.penetration_depth(polygon)
             if d:
                 c += 100000+1000*d**2
+
         #penalty to maintain the lengths of the links
         if previous_location is not None:
             d = abs(np.linalg.norm(location-previous_location)-Path.ideal_length)
             c += 100*d**2
         previous_location = location
+
     return c
 
 class Path:
@@ -45,6 +54,7 @@ class Path:
         self.states = []
         self.factor = 50
         self.discount = .8
+        self.save()
 
     @property
     def normals(self):
@@ -53,48 +63,129 @@ class Path:
     def points(self):
         return [s.location for s in self.states]
 
-    def update(self,env,maxiter=2):
+    def benchmark(self,env,iterations=10,draw_callback=None):
         """
-            Make the path a bit better
+            Run the dynamic and simple optimization and calculate show their final costs.
         """
-        t_init = time.time()
 
-        for index,state in enumerate(self.states):
+        self.save()
+
+        cost = None
+
+        for i in range(iterations):
+            cost = self.update(env,dynamic=True,quite=True)
+            if draw_callback:
+                draw_callback()
+        print "Dynamic final cost:",cost
+
+        self.reset()
+
+        for i in range(iterations):
+            cost = self.update(env,dynamic=False,quite=True)
+            if draw_callback:
+                draw_callback()
+        print "Simple final cost:",cost
+
+    def dynamic_update(self,env,maxiter):
+        """
+            Optimize the path by moving states in the direction of their normals.
+        """
+        for index,state in enumerate(self.states): #loop over all the states
             if state.normal_points() is not None:
-                old_loc = state.location
 
                 x0 = np.array([s.location for s in self.states])
                 old_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
 
                 for point in state.normal_points(factor=self.factor):
-                    x0[index] = point
-                    res = optimize.fmin(cost,x0,args=(env,x0[0],x0[-1]),maxiter=maxiter,disp=False)
+
+                    x0[index] = point #try moving the state in the direction of one of the normals
+                    res = optimize.fmin(cost,
+                                        x0,
+                                        args=(env,x0[0],x0[-1]),
+                                        maxiter=maxiter,
+                                        disp=False)
+
+                    # if moving in the direction of this normal helped, then update the path
                     if cost(x0.flatten(),env,self.initial_location,self.final_location) < old_cost:
                         for index,location in enumerate(grouper(2,res)):
                             self.states[index].location = np.array(location)
                             self.generate_path_normals()
 
+    def save(self):
+        """
+            Save a copy of the current path
+        """
+        self.saved_states = copy.deepcopy(self.states)
+        self.saved_factor = copy.deepcopy(self.factor)
+        self.saved_discount = copy.deepcopy(self.discount)
+
+    def reset(self):
+        """
+            Reset the path to the previously saved state
+        """
+        self.states = self.saved_states
+        self.discount = self.saved_discount
+        self.factor = self.saved_factor
+
+    def simple_update(self,env,maxiter):
+        """
+            Simply uses scipy fmin to optimize the path.
+        """
+        x0 = np.array([s.location for s in self.states])
+        res = optimize.fmin(cost,x0,args=(env,x0[0],x0[-1]),maxiter=maxiter,disp=False)
+        for index,location in enumerate(grouper(2,res)):
+            self.states[index].location = np.array(location)
+            self.generate_path_normals()
         
+    def update(self,env,maxiter=5,quite=False,dynamic=True):
+        """
+            Optimize the path.
+        """
+        t_init = time.time()
+
+        if dynamic:
+            self.dynamic_update(env,maxiter) 
+        else:
+            self.simple_update(env,maxiter)
+
+
+        x0 = np.array([s.location for s in self.states])
         final_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
-        print "Final cost is",final_cost
-        print "Took",time.time()-t_init,"seconds"
+
+        if not quite:
+            print "Final cost is",final_cost
+            print "Took",time.time()-t_init,"seconds"
+
         self.factor *= self.discount
+        return final_cost
 
 
     def generate_path(self,length=15,start=np.array([100,300]),end=np.array([700,300])):
-        Path.ideal_length = np.linalg.norm(start-end) / length
+        """
+            Generate a path from start to end.
+        """
+        Path.ideal_length = np.linalg.norm(start-end) / length # the desired length of the segments
+
         points = linspace2d(start,end,length)
         for p in points:
             self.states.append(State(p))
+
+        #save the initial and final locations for use as costs
         self.initial_location = self.states[0].location
         self.final_location = self.states[-1].location
 
     def perturb_path(self,factor=10):
+        """
+            Randomly perturb the path.
+        """
         for index,point in enumerate(self.points):
             r = np.random.rand(2)-np.array([0.5,0.5])
             self.states[index].location = point+r*factor
 
     def generate_path_normals(self):
+        """
+            Calculate the normals of the states in the path.
+        """
         for index,point in enumerate(self.points):
             if index > 1:
                 xdiff = point[0]-self.points[index-2][0]
