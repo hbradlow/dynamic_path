@@ -12,8 +12,9 @@ def key_callback(event):
         draw()
         vis.draw()
         root.update_idletasks()
-    path.benchmark(env,draw_callback=draw_callback,iterations=10)
-    #path.update(env)
+    #path.benchmark(env,draw_callback=draw_callback,iterations=10)
+    path.update(env)
+    draw_callback()
 
 vis = Visualizer(root,800,600,key_callback=key_callback)
 

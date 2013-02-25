@@ -6,6 +6,8 @@ import random
 import time
 import copy
 
+MAX_ITER_DEFAULT = 5
+
 class Environment:
     def __init__(self):
         self.polygons = []
@@ -63,7 +65,7 @@ class Path:
     def points(self):
         return [s.location for s in self.states]
 
-    def benchmark(self,env,iterations=10,draw_callback=None):
+    def benchmark(self,env,iterations=10,draw_callback=None,quite=False):
         """
             Run the dynamic and simple optimization and calculate show their final costs.
         """
@@ -72,44 +74,36 @@ class Path:
 
         cost = None
 
+        if not quite:
+            print "Trying dynamic with before_movement"
+        for i in range(iterations):
+            cost = self.update(env,dynamic=True,quite=True,before_movement=True)
+            if draw_callback:
+                draw_callback()
+        if not quite:
+            print "Dynamic final cost (before_movement):",cost
+
+        self.reset()
+
+        if not quite:
+            print "Trying dynamic without before_movement"
         for i in range(iterations):
             cost = self.update(env,dynamic=True,quite=True)
             if draw_callback:
                 draw_callback()
-        print "Dynamic final cost:",cost
+        if not quite:
+            print "Dynamic final cost (not before_movement):",cost
 
         self.reset()
 
+        if not quite:
+            print "Trying simple"
         for i in range(iterations):
             cost = self.update(env,dynamic=False,quite=True)
             if draw_callback:
                 draw_callback()
-        print "Simple final cost:",cost
-
-    def dynamic_update(self,env,maxiter):
-        """
-            Optimize the path by moving states in the direction of their normals.
-        """
-        for index,state in enumerate(self.states): #loop over all the states
-            if state.normal_points() is not None:
-
-                x0 = np.array([s.location for s in self.states])
-                old_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
-
-                for point in state.normal_points(factor=self.factor):
-
-                    x0[index] = point #try moving the state in the direction of one of the normals
-                    res = optimize.fmin(cost,
-                                        x0,
-                                        args=(env,x0[0],x0[-1]),
-                                        maxiter=maxiter,
-                                        disp=False)
-
-                    # if moving in the direction of this normal helped, then update the path
-                    if cost(x0.flatten(),env,self.initial_location,self.final_location) < old_cost:
-                        for index,location in enumerate(grouper(2,res)):
-                            self.states[index].location = np.array(location)
-                            self.generate_path_normals()
+        if not quite:
+            print "Simple final cost:",cost
 
     def save(self):
         """
@@ -126,27 +120,67 @@ class Path:
         self.states = self.saved_states
         self.discount = self.saved_discount
         self.factor = self.saved_factor
+        self.save()
 
-    def simple_update(self,env,maxiter):
+    def simple_update(self,env,maxiter=MAX_ITER_DEFAULT,optimize_callback=None):
         """
             Simply uses scipy fmin to optimize the path.
         """
         x0 = np.array([s.location for s in self.states])
-        res = optimize.fmin(cost,x0,args=(env,x0[0],x0[-1]),maxiter=maxiter,disp=False)
-        for index,location in enumerate(grouper(2,res)):
+        if optimize_callback:
+            res = grouper(2,optimize_callback(x0))
+        else:
+            res = x0
+        for index,location in enumerate(res):
             self.states[index].location = np.array(location)
             self.generate_path_normals()
         
-    def update(self,env,maxiter=5,quite=False,dynamic=True):
+    def dynamic_update(self,env,maxiter=MAX_ITER_DEFAULT,optimize_callback=None,before_movement=False):
+        for index,state in enumerate(self.states): #loop over all the states
+            if state.normal_points() is not None:
+
+                x0 = np.array([s.location for s in self.states])
+                old_cost = cost(x0.flatten(),env,self.initial_location,self.final_location)
+
+                for point in state.normal_points(factor=self.factor):
+
+                    x0[index] = point #try moving the state in the direction of one of the normals
+
+                    if before_movement:
+                        if optimize_callback:
+                            res = grouper(2,optimize_callback(x0))
+                            x0 = np.array([location for location in res])
+                        else:
+                            res = x0
+
+                    # if moving in the direction of this normal helped, then update the path
+                    if cost(x0.flatten(),env,self.initial_location,self.final_location) < old_cost:
+                        if not before_movement:
+                            if optimize_callback:
+                                res = grouper(2,optimize_callback(x0))
+                            else:
+                                res = x0
+                        for index,location in enumerate(res):
+                            self.states[index].location = np.array(location)
+                            self.generate_path_normals()
+
+    def update(self,env,maxiter=MAX_ITER_DEFAULT,quite=False,dynamic=True,**kwargs):
         """
             Optimize the path.
         """
         t_init = time.time()
 
+        def optimize_callback(x0):
+            res = optimize.fmin(cost,
+                                x0,
+                                args=(env,self.initial_location,self.final_location),
+                                maxiter=maxiter,
+                                disp=False)
+            return res
         if dynamic:
-            self.dynamic_update(env,maxiter) 
+            self.dynamic_update(env,maxiter,optimize_callback=optimize_callback,**kwargs)
         else:
-            self.simple_update(env,maxiter)
+            self.simple_update(env,maxiter,optimize_callback=optimize_callback,**kwargs)
 
 
         x0 = np.array([s.location for s in self.states])
